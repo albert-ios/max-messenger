@@ -1,11 +1,10 @@
 import '../styles/main.css';
-import { initSocket } from './socket.js'; // Импортируем
+import { initUI } from './ui.js';
+import { initSocket } from './socket.js'; // <--- ВАЖНО: В фигурных скобках
 
-console.log('Rspack app started!');
+console.log('App started');
 
 document.addEventListener('DOMContentLoaded', () => {
-    const app = document.getElementById('app');
-    app.innerHTML = '<h1>Привет! Rspack работает 🚀</h1><p>Открой консоль (F12) -> Console, чтобы увидеть чат.</p>';
-    
-    initSocket(); // Запускаем тест соединения
+    initUI();
+    // initSocket(); // Можно пока закомментировать, запустим его, когда войдем в чат
 });

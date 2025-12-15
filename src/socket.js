@@ -1,6 +1,5 @@
 export function initSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Добавляем /chat-ws вместо /ws
     const wsUrl = `${protocol}//${window.location.host}/chat-ws`;
     
     console.log('Connecting to:', wsUrl);
@@ -8,7 +7,6 @@ export function initSocket() {
 
     socket.onopen = () => {
         console.log('✅ WebSocket подключен!');
-        socket.send(JSON.stringify({ text: 'Привет от фронтенда!' }));
     };
 
     socket.onmessage = (event) => {

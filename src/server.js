@@ -1,46 +1,29 @@
-import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { initDB } from './config/db.js';
+import app from './app.js';
 
-// Инициализация приложения
-const app = express();
+// Создаем HTTP сервер на основе настроенного app
 const server = http.createServer(app);
 
 // WebSocket на пути /chat-ws
 const wss = new WebSocketServer({ server, path: '/chat-ws' }); 
 
-// Конфигурация
+// Конфигурация порта
 const PORT = process.env.PORT || 3000;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Middleware
-app.use(express.json());
 
 // Инициализация Базы Данных
-initDB(); // <--- ЗАПУСК ЗДЕСЬ
+initDB();
 
-// Тестовый маршрут
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Бэкенд работает успешно!' });
-});
+// Передаем wss в app, чтобы контроллеры могли делать broadcast (понадобится позже)
+app.set('wss', wss);
 
-// Логика WebSocket
+// Логика WebSocket (пока простая)
 wss.on('connection', (ws) => {
   console.log('Client connected via WebSocket');
   
   ws.on('message', (message) => {
-    // Парсим сообщение, чтобы убедиться, что это JSON
-    try {
-        const parsed = JSON.parse(message);
-        console.log('Received:', parsed);
-        // Эхо ответ
-        ws.send(JSON.stringify({ type: 'info', text: 'Сервер получил твое сообщение!' }));
-    } catch (e) {
-        console.log('Received raw:', message.toString());
-    }
+    console.log('Received:', message.toString());
   });
 
   ws.on('close', () => console.log('Client disconnected'));
