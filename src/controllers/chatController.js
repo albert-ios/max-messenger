@@ -31,43 +31,57 @@ export const getHistory = async (req, res, next) => {
     next(err);
   }
 };
+// Вставь это в controllers/chatController.js вместо старой sendMessage
+
+// Вставь это в controllers/chatController.js вместо старой sendMessage
 
 export const sendMessage = async (req, res, next) => {
   try {
+    console.log("📥 [Server] Получен запрос sendMessage");
+
+    // 1. ПРОВЕРКА АВТОРИЗАЦИИ
+    // Если req.user нет, значит middleware не сработал
+    if (!req.user) {
+        console.error("❌ Ошибка: req.user is undefined. Пользователь не авторизован.");
+        return res.status(401).json({ error: 'Ошибка авторизации' });
+    }
+
     const { chatId } = req.params;
     const { content } = req.body;
-    const file = req.file; // Если есть файл, он будет здесь
+    const file = req.file;
 
-    if (!content && !file) {
-      return res.status(400).json({ error: 'Сообщение не может быть пустым' });
+    console.log(`👤 User: ${req.user.id}, Chat: ${chatId}, Content: ${content}`);
+
+    // 2. СОХРАНЕНИЕ В БД
+    // (Убедись, что createMessage импортирован в начале файла!)
+    const newMessage = await createMessage(chatId, req.user.id, content || '', 'text', null);
+    console.log("✅ Сообщение сохранено в БД, ID:", newMessage.id);
+
+    // 3. ОТПРАВКА ПО WEBSOCKET (С защитой от вылета)
+    try {
+        const wss = req.app.get('wss');
+        if (wss && wss.clients) {
+            wss.clients.forEach((client) => {
+              if (client.readyState === 1) { 
+                client.send(JSON.stringify({
+                  type: 'NEW_MESSAGE',
+                  payload: newMessage
+                }));
+              }
+            });
+        } else {
+            console.log("⚠️ WSS не найден, но это не критично.");
+        }
+    } catch (wsError) {
+        console.error("⚠️ Ошибка WebSocket:", wsError.message);
     }
 
-    // Определяем тип сообщения
-    let type = 'text';
-    let fileUrl = null;
-
-    if (file) {
-      type = file.mimetype.startsWith('image/') ? 'image' : 'file';
-      // Ссылка, по которой фронт сможет скачать файл
-      fileUrl = `/uploads/${file.filename}`;
-    }
-
-    // 1. Сохраняем в БД
-    const newMessage = await createMessage(chatId, req.user.id, content || '', type, fileUrl);
-
-    // 2. ОТПРАВЛЯЕМ ВСЕМ ЧЕРЕЗ WEBSOCKET (REAL-TIME)
-    const wss = req.app.get('wss');
-    wss.clients.forEach((client) => {
-      if (client.readyState === 1) { // 1 = OPEN
-        client.send(JSON.stringify({
-          type: 'NEW_MESSAGE',
-          payload: newMessage
-        }));
-      }
-    });
-
+    // 4. ОТВЕТ КЛИЕНТУ
     res.status(201).json(newMessage);
+
   } catch (err) {
-    next(err);
+    // ВОТ ЗДЕСЬ мы увидим настоящую причину ошибки в терминале
+    console.error("🔥 КРИТИЧЕСКАЯ ОШИБКА НА СЕРВЕРЕ:", err);
+    res.status(500).json({ error: err.message });
   }
 };

@@ -1,37 +1,33 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import { initDB } from './config/db.js';
-import app from './app.js';
+import app from './app.js'; // Импортируем настроенный Express app
+import { db } from './config/db.js'; // Подключаем базу
 
-// Создаем HTTP сервер на основе настроенного app
+// 1. Создаем "обертку" HTTP-сервера вокруг Express
+// Это нужно, чтобы на одном порту работал и сайт, и WebSocket
 const server = http.createServer(app);
 
-// WebSocket на пути /chat-ws
-const wss = new WebSocketServer({ server, path: '/chat-ws' }); 
+// 2. Создаем WebSocket сервер и привязываем его к нашему HTTP серверу
+const wss = new WebSocketServer({ server });
 
-// Конфигурация порта
-const PORT = process.env.PORT || 3000;
-
-// Инициализация Базы Данных
-initDB();
-
-// Передаем wss в app, чтобы контроллеры могли делать broadcast (понадобится позже)
+// Сохраняем wss в app, чтобы использовать его в контроллерах (для sendMessage)
 app.set('wss', wss);
 
-// Логика WebSocket (пока простая)
+// Логика работы WebSocket
 wss.on('connection', (ws) => {
-  console.log('Client connected via WebSocket');
-  
-  ws.on('message', (message) => {
-    console.log('Received:', message.toString());
-  });
+  console.log('🔌 Новое WebSocket подключение!');
 
-  ws.on('close', () => console.log('Client disconnected'));
   ws.on('error', console.error);
+
+  ws.on('message', (message) => {
+    // Если нужно обрабатывать входящие сообщения от сокета (пока у нас через HTTP)
+    console.log('Получено сообщение:', message);
+  });
 });
 
-// Запуск сервера
-server.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket ждет подключений по адресу /chat-ws`);
+// 3. ЗАПУСКАЕМ ИМЕННО SERVER (а не app.listen)
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  console.log(`📡 WebSocket готов к подключениям`);
 });

@@ -3,11 +3,79 @@ import { login, register, request } from './api.js';
 // Состояние приложения
 let currentChatId = null;
 
+// ================================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (WebSocket и отображение)
+// ================================================================
+
+function appendMessageToView(msg) {
+    const container = document.getElementById('messages');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    div.className = 'message';
+    
+    // Красивое отображение имени
+    const authorName = msg.username || 'Собеседник';
+    div.innerHTML = `<b>${authorName}:</b> ${msg.content}`;
+    
+    container.appendChild(div);
+    
+    // Прокрутка вниз
+    container.scrollTop = container.scrollHeight;
+}
+
+function connectWebSocket() {
+    // Определяем адрес: берем текущий IP, но порт ставим 3000 (где бэкенд)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname; // Например, 172.20.10.4
+    const port = '3000'; 
+    
+    console.log(`🔌 Подключение к WebSocket: ${protocol}//${host}:${port}`);
+    const ws = new WebSocket(`${protocol}//${host}:${port}`);
+
+    ws.onopen = () => {
+        console.log('🟢 WebSocket подключен!');
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'NEW_MESSAGE') {
+                const message = data.payload;
+                
+                // Если мы прямо сейчас смотрим этот чат - показываем сообщение
+                if (currentChatId && message.chat_id == currentChatId) {
+                    appendMessageToView(message);
+                }
+            }
+        } catch (e) {
+            console.error('Ошибка обработки WS сообщения:', e);
+        }
+    };
+
+    ws.onclose = () => {
+        console.log('🔴 WebSocket отключился. Переподключение через 3 сек...');
+        setTimeout(connectWebSocket, 3000);
+    };
+    
+    ws.onerror = (error) => {
+        console.error('WebSocket ошибка:', error);
+    };
+}
+
+// ================================================================
+// ОСНОВНАЯ ЛОГИКА UI
+// ================================================================
+
 export function initUI() {
   const loginForm = document.getElementById('login-form');
   const registerForm = document.getElementById('register-form');
   
-  // Логика переключения форм входа/регистрации
+  // 1. Запускаем WebSocket сразу при загрузке UI
+  connectWebSocket();
+
+  // Логика переключения форм
   if (document.getElementById('go-to-register')) {
       document.getElementById('go-to-register').onclick = (e) => {
         e.preventDefault();
@@ -52,13 +120,13 @@ export function initUI() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       showChatView();
-      loadChats(); // Загружаем чаты сразу после входа
+      loadChats();
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // Логика создания чата
+  // Создание чата
   const createChatBtn = document.getElementById('create-chat-btn');
   if (createChatBtn) {
       createChatBtn.onclick = async () => {
@@ -68,49 +136,34 @@ export function initUI() {
 
         try {
             await request('/api/chats', 'POST', { name });
-            nameInput.value = ''; // Очистить поле
-            loadChats(); // Обновить список
+            nameInput.value = '';
+            loadChats();
         } catch (err) {
             alert('Ошибка создания чата: ' + err.message);
         }
       };
   }
 
-  // Логика кнопки "Скрепка"
-  const attachBtn = document.getElementById('attach-btn');
-  const fileInput = document.getElementById('file-input');
-  
-  if (attachBtn && fileInput) {
-      attachBtn.onclick = () => fileInput.click();
-      fileInput.onchange = () => {
-          if (fileInput.files.length > 0) {
-              alert(`Файл "${fileInput.files[0].name}" выбран! (Логика отправки скоро будет)`);
-          }
-      };
-  }
-
-  const sendBtn = document.getElementById('send-btn'); // Убедись, что в HTML кнопка имеет id="send-btn"
-  const messageInput = document.getElementById('message-input'); // Убедись, что поле ввода имеет id="message-input"
+  // Логика отправки сообщения
+  const sendBtn = document.getElementById('send-btn');
+  const messageInput = document.getElementById('message-input');
 
   const handleSendMessage = async () => {
       const content = messageInput.value;
       
-      // Проверки
-      if (!content.trim()) return; // Не отправляем пустоту
+      if (!content.trim()) return; 
       if (!currentChatId) return alert('Выберите чат!');
 
       try {
-          // 1. Отправляем запрос на сервер
-          // Используем request, который у тебя уже импортирован
+          // Отправляем на сервер
           await request(`/api/chats/${currentChatId}/messages`, 'POST', { content });
           
-          // 2. Очищаем поле ввода
+          // Очищаем поле
           messageInput.value = '';
 
-          // 3. Обновляем список сообщений
-          // (В идеале это делает WebSocket, но пока обновим вручную через запрос)
-          const messages = await request(`/api/chats/${currentChatId}/messages`);
-          renderMessages(messages);
+          // ВАЖНО: Мы НЕ вызываем renderMessages() тут вручную.
+          // Мы ждем, пока WebSocket пришлет нам наше же сообщение обратно.
+          // Это и будет доказательством работы Real-time!
           
       } catch (err) {
           console.error('Ошибка отправки:', err);
@@ -122,16 +175,13 @@ export function initUI() {
       sendBtn.onclick = handleSendMessage;
   }
 
-  // Дополнительно: Отправка по нажатию Enter
   if (messageInput) {
       messageInput.onkeydown = (e) => {
-          if (e.key === 'Enter') {
-             handleSendMessage();
-          }
+          if (e.key === 'Enter') handleSendMessage();
       };
   }
 
-  // Выход из аккаунта
+  // Выход
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
       logoutBtn.onclick = () => {
@@ -141,20 +191,17 @@ export function initUI() {
       };
   }
 
-  // Если пользователь уже вошел ранее
+  // Если уже вошли
   if (localStorage.getItem('token')) {
     showChatView();
     loadChats();
   }
 }
 
-// Показывает экран чата, скрывает вход
+// Показывает экран чата
 function showChatView() {
-    const authView = document.getElementById('auth-view');
-    const chatView = document.getElementById('chat-view');
-    
-    if (authView) authView.style.display = 'none';
-    if (chatView) chatView.style.display = 'flex'; // Используем flex для колонок
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('chat-view').style.display = 'flex';
 
     const user = JSON.parse(localStorage.getItem('user'));
     if (user && document.getElementById('current-user')) {
@@ -162,14 +209,14 @@ function showChatView() {
     }
 }
 
-// Загружает список чатов с сервера
+// Загружает чаты
 async function loadChats() {
     try {
         const chats = await request('/api/chats');
         const list = document.getElementById('chat-list');
         if (!list) return;
         
-        list.innerHTML = ''; // Очистка старого списка
+        list.innerHTML = ''; 
 
         chats.forEach(chat => {
             const div = document.createElement('div');
@@ -183,21 +230,14 @@ async function loadChats() {
     }
 }
 
-// Выбор конкретного чата
+// Выбор чата
 async function selectChat(chat) {
     currentChatId = chat.id;
     
-    // Подсветка активного чата
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
-    // (можно добавить event.target.classList.add('active'), но пока так)
-
-    // Обновление заголовка
     document.getElementById('chat-header').innerHTML = `<h3>${chat.name}</h3>`;
-    
-    // Показываем поле ввода (оно скрыто по умолчанию)
     document.getElementById('input-area').style.display = 'flex';
 
-    // Загрузка сообщений
     const messagesContainer = document.getElementById('messages');
     messagesContainer.innerHTML = '<i>Загрузка истории...</i>';
 
@@ -219,64 +259,12 @@ function renderMessages(messages) {
     }
 
     messages.forEach(msg => {
+        // Используем ту же функцию, что и для WebSocket, чтобы код был чище
         const div = document.createElement('div');
         div.className = 'message';
-        div.innerHTML = `<b>${msg.username}</b> ${msg.content}`;
+        div.innerHTML = `<b>${msg.username}:</b> ${msg.content}`;
         container.appendChild(div);
     });
     
-    // Прокрутка вниз
     container.scrollTop = container.scrollHeight;
 }
-
-
-// ============================================================
-  // Вставь это в конец функции initUI()
-  // ============================================================
-
-  const sendBtn = document.getElementById('send-btn');
-  const messageInput = document.getElementById('message-input');
-
-  // Функция отправки
-  const handleSendMessage = async () => {
-      const content = messageInput.value;
-      
-      // 1. Проверки: текст не пустой и чат выбран
-      if (!content.trim()) return; 
-      if (!currentChatId) {
-          alert('Сначала выберите чат слева!');
-          return;
-      }
-
-      try {
-          // 2. Отправляем данные на сервер
-          // (Используем твою функцию request из api.js)
-          await request(`/api/chats/${currentChatId}/messages`, 'POST', { content });
-          
-          // 3. Очищаем поле ввода сразу после отправки
-          messageInput.value = '';
-
-          // 4. Обновляем список сообщений
-          // Мы запрашиваем историю заново, чтобы увидеть своё новое сообщение
-          const messages = await request(`/api/chats/${currentChatId}/messages`);
-          renderMessages(messages);
-          
-      } catch (err) {
-          console.error('Ошибка при отправке:', err);
-          alert('Не удалось отправить сообщение. Проверь консоль.');
-      }
-  };
-
-  // Привязываем клик по кнопке "Send"
-  if (sendBtn) {
-      sendBtn.onclick = handleSendMessage;
-  }
-
-  // Привязываем нажатие Enter в поле ввода
-  if (messageInput) {
-      messageInput.onkeydown = (e) => {
-          if (e.key === 'Enter') {
-             handleSendMessage();
-          }
-      };
-  }

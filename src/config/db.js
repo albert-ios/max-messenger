@@ -1,14 +1,9 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const dbPath = path.resolve(__dirname, '../database.sqlite');
-
-const sqlite = sqlite3.verbose();
-
-const db = new sqlite.Database(dbPath, (err) => {
+// Подключаем базу данных (она создастся в корне проекта)
+const dbPath = path.resolve('database.sqlite');
+export const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('❌ Ошибка подключения к БД:', err.message);
   } else {
@@ -16,49 +11,37 @@ const db = new sqlite.Database(dbPath, (err) => {
   }
 });
 
-// Функция инициализации таблиц
-function initDB() {
-  db.serialize(() => {
-    // 1. Включаем внешние ключи (Foreign Keys)
-    db.run("PRAGMA foreign_keys = ON");
+// Создаем таблицы (с правильными колонками!)
+db.serialize(() => {
+  // 1. Таблица пользователей
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    email TEXT UNIQUE,
+    password TEXT,
+    avatar TEXT
+  )`);
 
-    // 2. Таблица Пользователей
-    db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  // 2. Таблица чатов
+  db.run(`CREATE TABLE IF NOT EXISTS chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id)
+  )`);
 
-    // 3. Таблица Чатов
-    db.run(`
-      CREATE TABLE IF NOT EXISTS chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        created_by INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-
-    // 4. Таблица Сообщений
-    db.run(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        content TEXT NOT NULL,
-        chat_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `);
-    
-    console.log('📦 Таблицы базы данных проверены/созданы');
-  });
-}
-
-export { db, initDB };
+  // 3. Таблица сообщений (ИСПРАВЛЕННАЯ)
+  // Мы добавляем 'type' и 'file_url'
+  db.run(`CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER,
+    user_id INTEGER,
+    content TEXT,
+    type TEXT DEFAULT 'text',
+    file_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(chat_id) REFERENCES chats(id),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
+});

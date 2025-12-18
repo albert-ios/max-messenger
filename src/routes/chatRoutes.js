@@ -14,4 +14,6 @@ router.get('/:id/messages', getHistory);
 // Маршрут для отправки сообщений (поддерживает файлы)
 router.post('/:chatId/messages', upload.single('file'), sendMessage);
 
+router.use(protect);
+
 export default router;
