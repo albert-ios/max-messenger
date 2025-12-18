@@ -1,5 +1,15 @@
 // frontend/src/api.js
+const BASE_URL = 'http://localhost:3000'; 
 
+// ИЛИ (лучше), чтобы работало везде:
+// const BASE_URL = ''; // <-- УДАЛИ ЭТО, если там пусто или просто слэш
+
+async function request(endpoint, method = 'GET', body = null) {
+    // Добавляем BASE_URL перед endpoint
+    const url = `http://localhost:3000${endpoint}`; 
+    
+    // ... остальной код ...
+}
 export async function request(url, method = 'GET', body = null) {
   const headers = { 'Content-Type': 'application/json' };
   
