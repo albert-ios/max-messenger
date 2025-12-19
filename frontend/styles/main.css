@@ -63,18 +63,6 @@ body {
 #send-btn { width: auto; padding: 0 25px; }
 
 /* Регистрация */
-#go-to-register:hover, #go-to-login:hover {
-    border-bottom: 1px solid #007bff;
-=======
-.logo-icon {
-    width: 48px; height: 48px;
-    background: var(--brand-gradient);
-    border-radius: 12px;
-    margin: 0 auto 16px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 24px; color: white;
-    box-shadow: 0 10px 20px var(--brand-glow);
-}
 
 .auth-header h2 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
 .auth-header p { color: var(--text-muted); font-size: 14px; }
@@ -245,5 +233,4 @@ body {
     margin-top: 10px; background: transparent;
     border: 1px solid rgba(255,255,255,0.2); color: #888;
     padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
->>>>>>> make-design
 }
